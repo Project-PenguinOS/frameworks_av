@@ -1402,14 +1402,12 @@ void AudioPolicyManager::updateCoPlayOutput()
                 && !desc->mProfile->isDirectOutput()
                 && (desc->mFlags & (AUDIO_OUTPUT_FLAG_DIRECT | AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD
                         | AUDIO_OUTPUT_FLAG_MMAP_NOIRQ | AUDIO_OUTPUT_FLAG_BIT_PERFECT
-                        | AUDIO_OUTPUT_FLAG_SPATIALIZER)) == 0;
+                        | AUDIO_OUTPUT_FLAG_SPATIALIZER | AUDIO_OUTPUT_FLAG_FAST
+                        | AUDIO_OUTPUT_FLAG_RAW)) == 0;
     };
 
     sp<SwAudioOutputDescriptor> wiredOutput;
     sp<SwAudioOutputDescriptor> btOutput;
-    if (isUsableForCoPlay(mPrimaryOutput) && mPrimaryOutput->routesToAtLeastOne(wiredDevices)) {
-        wiredOutput = mPrimaryOutput;
-    }
     for (size_t i = 0; i < mOutputs.size(); i++) {
         const sp<SwAudioOutputDescriptor>& desc = mOutputs.valueAt(i);
         if (desc == wiredOutput || !isUsableForCoPlay(desc)) {
