@@ -2624,6 +2624,28 @@ Status AudioPolicyService::setRttEnabled(bool enabled)
     return Status::ok();
 }
 
+Status AudioPolicyService::setBtWiredCoPlayEnabled(bool enabled)
+{
+    if (mAudioPolicyManager == NULL) {
+        return binderStatusFromStatusT(NO_INIT);
+    }
+    audio_utils::lock_guard _l(mMutex);
+    AutoCallerClear acc;
+    mAudioPolicyManager->setBtWiredCoPlayEnabled(enabled);
+    return Status::ok();
+}
+
+Status AudioPolicyService::isBtWiredCoPlayEnabled(bool* _aidl_return)
+{
+    if (mAudioPolicyManager == NULL) {
+        return binderStatusFromStatusT(NO_INIT);
+    }
+    audio_utils::lock_guard _l(mMutex);
+    AutoCallerClear acc;
+    *_aidl_return = mAudioPolicyManager->isBtWiredCoPlayEnabled();
+    return Status::ok();
+}
+
 Status AudioPolicyService::isCallScreenModeSupported(bool* _aidl_return)
 {
     if (mAudioPolicyManager == NULL) {

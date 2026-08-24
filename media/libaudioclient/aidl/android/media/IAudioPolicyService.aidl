@@ -392,6 +392,10 @@ interface IAudioPolicyService {
 
     void setRttEnabled(boolean enabled);
 
+    void setBtWiredCoPlayEnabled(boolean enabled);
+
+    boolean isBtWiredCoPlayEnabled();
+
     boolean isCallScreenModeSupported();
 
     void setDevicesRoleForStrategy(int /* product_strategy_t */ strategy,

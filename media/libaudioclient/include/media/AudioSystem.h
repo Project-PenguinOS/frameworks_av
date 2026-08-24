@@ -636,6 +636,10 @@ public:
 
     static status_t setRttEnabled(bool enabled);
 
+    static status_t setBtWiredCoPlayEnabled(bool enabled);
+
+    static bool     isBtWiredCoPlayEnabled();
+
     static bool     isCallScreenModeSupported();
 
      /**

@@ -277,6 +277,8 @@ public:
             bool fallbackOnDefault,
             int32_t* _aidl_return) override;
     binder::Status setRttEnabled(bool enabled) override;
+    binder::Status setBtWiredCoPlayEnabled(bool enabled) override;
+    binder::Status isBtWiredCoPlayEnabled(bool* _aidl_return) override;
     binder::Status isCallScreenModeSupported(bool* _aidl_return) override;
     binder::Status setDevicesRoleForStrategy(
             int32_t strategy, media::DeviceRole role,

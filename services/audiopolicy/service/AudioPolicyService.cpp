@@ -165,6 +165,8 @@ BINDER_METHOD_ENTRY(getProductStrategyFromAudioAttributes) \
 BINDER_METHOD_ENTRY(listAudioVolumeGroups) \
 BINDER_METHOD_ENTRY(getVolumeGroupFromAudioAttributes) \
 BINDER_METHOD_ENTRY(setRttEnabled) \
+BINDER_METHOD_ENTRY(setBtWiredCoPlayEnabled) \
+BINDER_METHOD_ENTRY(isBtWiredCoPlayEnabled) \
 BINDER_METHOD_ENTRY(isCallScreenModeSupported) \
 BINDER_METHOD_ENTRY(setDevicesRoleForStrategy) \
 BINDER_METHOD_ENTRY(removeDevicesRoleForStrategy) \
@@ -1420,6 +1422,7 @@ status_t AudioPolicyService::onTransact(
         case TRANSACTION_releaseSoundTriggerSession:
         case TRANSACTION_isHotwordStreamSupported:
         case TRANSACTION_setRttEnabled:
+        case TRANSACTION_setBtWiredCoPlayEnabled:
         case TRANSACTION_isCallScreenModeSupported:
         case TRANSACTION_setDevicesRoleForStrategy:
         case TRANSACTION_setSupportedSystemUsages:

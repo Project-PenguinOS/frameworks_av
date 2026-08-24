@@ -2609,6 +2609,22 @@ status_t AudioSystem::setRttEnabled(bool enabled) {
     return statusTFromBinderStatus(aps->setRttEnabled(enabled));
 }
 
+status_t AudioSystem::setBtWiredCoPlayEnabled(bool enabled) {
+    const sp<IAudioPolicyService> aps = get_audio_policy_service();
+    if (aps == nullptr) return AudioPolicyServiceTraits::getError();
+    return statusTFromBinderStatus(aps->setBtWiredCoPlayEnabled(enabled));
+}
+
+bool AudioSystem::isBtWiredCoPlayEnabled() {
+    const sp<IAudioPolicyService> aps = get_audio_policy_service();
+    if (aps == nullptr) return false;
+    bool enabled;
+    if (statusTFromBinderStatus(aps->isBtWiredCoPlayEnabled(&enabled)) != OK) {
+        return false;
+    }
+    return enabled;
+}
+
 bool AudioSystem::isCallScreenModeSupported() {
     const sp<IAudioPolicyService> aps = get_audio_policy_service();
     if (aps == nullptr) return false;

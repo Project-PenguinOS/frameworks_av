@@ -867,22 +867,53 @@ DeviceVector Engine::getDevicesForProductStrategy(product_strategy_t strategy) c
 
     filterOutputDevicesForStrategy(legacyStrategy, availableOutputDevices, outputs);
 
+    DeviceVector devices;
+
     // check if this strategy has a preferred device that is available,
     // if yes, give priority to it.
     DeviceVector preferredAvailableDevVec =
             getPreferredAvailableDevicesForProductStrategy(availableOutputDevices, strategy);
     if (!preferredAvailableDevVec.isEmpty()) {
-        return preferredAvailableDevVec;
+        devices = preferredAvailableDevVec;
+    } else {
+        // Remove all disabled devices from the available device list.
+        DeviceVector disabledDevVec =
+                getDisabledDevicesForProductStrategy(availableOutputDevices, strategy);
+        availableOutputDevices.remove(disabledDevVec);
+
+        devices = getDevicesForStrategyInt(legacyStrategy,
+                                           availableOutputDevices,
+                                           outputs);
     }
 
-    // Remove all disabled devices from the available device list.
-    DeviceVector disabledDevVec =
-            getDisabledDevicesForProductStrategy(availableOutputDevices, strategy);
-    availableOutputDevices.remove(disabledDevVec);
+    if (legacyStrategy == STRATEGY_MEDIA && !isInCall()
+            && getApmObserver()->isBtWiredCoPlayEnabled()) {
+        DeviceTypeSet btTypes = getAudioDeviceOutAllA2dpSet();
+        const DeviceTypeSet& leTypes = getAudioDeviceOutLeAudioUnicastSet();
+        btTypes.insert(leTypes.begin(), leTypes.end());
 
-    return getDevicesForStrategyInt(legacyStrategy,
-                                    availableOutputDevices,
-                                    outputs);
+        DeviceVector btDevices = availableOutputDevices.getDevicesFromTypes(btTypes);
+        DeviceVector wiredDevices = availableOutputDevices.getDevicesFromTypes({
+                AUDIO_DEVICE_OUT_WIRED_HEADSET,
+                AUDIO_DEVICE_OUT_WIRED_HEADPHONE,
+                AUDIO_DEVICE_OUT_USB_HEADSET,
+                AUDIO_DEVICE_OUT_USB_DEVICE});
+
+        if (btDevices.isEmpty() || wiredDevices.isEmpty()) {
+            ALOGI("%s co-play enabled but incomplete: bluetooth %s, wired %s, available %s",
+                  __func__, btDevices.toString().c_str(), wiredDevices.toString().c_str(),
+                  getApmObserver()->getAvailableOutputDevices().toString().c_str());
+        } else {
+            ALOGI("%s co-play on bluetooth %s and wired %s", __func__,
+                  btDevices.toString().c_str(), wiredDevices.toString().c_str());
+            DeviceVector combined;
+            combined.add(btDevices);
+            combined.add(wiredDevices);
+            return combined;
+        }
+    }
+
+    return devices;
 }
 
 DeviceVector Engine::getOutputDevicesForStrategy(product_strategy_t strategy,

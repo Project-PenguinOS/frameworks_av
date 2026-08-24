@@ -434,6 +434,10 @@ public:
 
     virtual bool     isCallScreenModeSupported() = 0;
 
+    virtual void     setBtWiredCoPlayEnabled(bool enabled) = 0;
+
+    virtual bool     isBtWiredCoPlayEnabled() const = 0;
+
     virtual status_t setDevicesRoleForStrategy(product_strategy_t strategy,
                                                device_role_t role,
                                                const AudioDeviceTypeAddrVector &devices) = 0;

@@ -1335,6 +1335,131 @@ void AudioPolicyManager::setForceUse(audio_policy_force_use_t usage,
     updateInputRouting();
 }
 
+void AudioPolicyManager::setBtWiredCoPlayEnabled(bool enabled)
+{
+    ALOGI("%s() enabled %d (was %d)", __func__, enabled, mBtWiredCoPlayEnabled);
+    if (enabled == mBtWiredCoPlayEnabled) {
+        return;
+    }
+    mBtWiredCoPlayEnabled = enabled;
+
+    checkForDeviceAndOutputChanges();
+    updateCallAndOutputRouting(false /*forceVolumeReeval*/, 0 /*delayMs*/);
+}
+
+const DeviceTypeSet& AudioPolicyManager::getCoPlayBtDeviceTypes()
+{
+    static const DeviceTypeSet btDeviceTypes = [] {
+        DeviceTypeSet types = getAudioDeviceOutAllA2dpSet();
+        const DeviceTypeSet& leTypes = getAudioDeviceOutLeAudioUnicastSet();
+        types.insert(leTypes.begin(), leTypes.end());
+        return types;
+    }();
+    return btDeviceTypes;
+}
+
+const DeviceTypeSet& AudioPolicyManager::getCoPlayWiredDeviceTypes()
+{
+    static const DeviceTypeSet wiredDeviceTypes = {
+        AUDIO_DEVICE_OUT_WIRED_HEADSET,
+        AUDIO_DEVICE_OUT_WIRED_HEADPHONE,
+        AUDIO_DEVICE_OUT_USB_HEADSET,
+        AUDIO_DEVICE_OUT_USB_DEVICE,
+    };
+    return wiredDeviceTypes;
+}
+
+bool AudioPolicyManager::isCoPlayDeviceSet(const DeviceVector &devices) const
+{
+    if (!mBtWiredCoPlayEnabled) {
+        return false;
+    }
+    return !devices.getDevicesFromTypes(getCoPlayBtDeviceTypes()).isEmpty()
+            && !devices.getDevicesFromTypes(getCoPlayWiredDeviceTypes()).isEmpty();
+}
+
+void AudioPolicyManager::updateCoPlayOutput()
+{
+    const DeviceVector devices = mEngine->getOutputDevicesForAttributes(
+            attributes_initializer(AUDIO_USAGE_MEDIA), 0 /*uid*/, nullptr /*preferredDevice*/,
+            false /*fromCache*/);
+    if (!isCoPlayDeviceSet(devices)) {
+        ALOGI_IF(mBtWiredCoPlayEnabled,
+                 "%s co-play enabled but media selection %s is not a co-play device set",
+                 __func__, devices.toString().c_str());
+        closeCoPlayOutput();
+        return;
+    }
+    if (mCoPlayOutput != nullptr) {
+        return;
+    }
+
+    const DeviceVector btDevices = devices.getDevicesFromTypes(getCoPlayBtDeviceTypes());
+    const DeviceVector wiredDevices = devices.getDevicesFromTypes(getCoPlayWiredDeviceTypes());
+
+    auto isUsableForCoPlay = [](const sp<SwAudioOutputDescriptor>& desc) {
+        return desc != nullptr && !desc->isDuplicated() && desc->mProfile != nullptr
+                && !desc->mProfile->isDirectOutput()
+                && (desc->mFlags & (AUDIO_OUTPUT_FLAG_DIRECT | AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD
+                        | AUDIO_OUTPUT_FLAG_MMAP_NOIRQ | AUDIO_OUTPUT_FLAG_BIT_PERFECT
+                        | AUDIO_OUTPUT_FLAG_SPATIALIZER)) == 0;
+    };
+
+    sp<SwAudioOutputDescriptor> wiredOutput;
+    sp<SwAudioOutputDescriptor> btOutput;
+    if (isUsableForCoPlay(mPrimaryOutput) && mPrimaryOutput->routesToAtLeastOne(wiredDevices)) {
+        wiredOutput = mPrimaryOutput;
+    }
+    for (size_t i = 0; i < mOutputs.size(); i++) {
+        const sp<SwAudioOutputDescriptor>& desc = mOutputs.valueAt(i);
+        if (desc == wiredOutput || !isUsableForCoPlay(desc)) {
+            continue;
+        }
+        if (wiredOutput == nullptr && desc->routesToAtLeastOne(wiredDevices)) {
+            wiredOutput = desc;
+        } else if (btOutput == nullptr && desc->routesToAtLeastOne(btDevices)) {
+            btOutput = desc;
+        }
+    }
+    if (wiredOutput == nullptr || btOutput == nullptr) {
+        ALOGW("%s no output pair available to play on %s and %s at the same time", __func__,
+              wiredDevices.toString().c_str(), btDevices.toString().c_str());
+        return;
+    }
+
+    sp<SwAudioOutputDescriptor> dupOutput =
+            new SwAudioOutputDescriptor(nullptr /*profile*/, mpClientInterface);
+    audio_io_handle_t duplicatedOutput = AUDIO_IO_HANDLE_NONE;
+    if (dupOutput->openDuplicating(wiredOutput, btOutput, &duplicatedOutput) != NO_ERROR) {
+        ALOGE("%s could not open co-play duplicated output for %d and %d", __func__,
+              wiredOutput->mIoHandle, btOutput->mIoHandle);
+        return;
+    }
+    addOutput(duplicatedOutput, dupOutput);
+    mCoPlayOutput = dupOutput;
+    mCoPlayWiredOutput = wiredOutput;
+    mCoPlayBtOutput = btOutput;
+    ALOGI("%s opened co-play duplicated output %d (wired %d, bluetooth %d)", __func__,
+          duplicatedOutput, wiredOutput->mIoHandle, btOutput->mIoHandle);
+}
+
+void AudioPolicyManager::closeCoPlayOutput()
+{
+    if (mCoPlayOutput == nullptr) {
+        return;
+    }
+    const sp<SwAudioOutputDescriptor> dupOutput = mCoPlayOutput;
+    const audio_io_handle_t duplicatedOutput = dupOutput->mIoHandle;
+    mCoPlayOutput.clear();
+    mCoPlayWiredOutput.clear();
+    mCoPlayBtOutput.clear();
+
+    ALOGI("%s closing co-play duplicated output %d", __func__, duplicatedOutput);
+    dupOutput->close();
+    removeOutput(duplicatedOutput);
+    nextAudioPortGeneration();
+}
+
 void AudioPolicyManager::setSystemProperty(const char* property, const char* value)
 {
     ALOGV("setSystemProperty() property %s, value %s", property, value);
@@ -2133,12 +2258,21 @@ audio_io_handle_t AudioPolicyManager::getOutputForDevices(
         *flags = (audio_output_flags_t)(*flags | AUDIO_OUTPUT_FLAG_ULTRASOUND);
     }
 
+    const bool coPlay = mCoPlayOutput != nullptr && audio_is_linear_pcm(config->format)
+            && isCoPlayDeviceSet(devices);
+    if (coPlay) {
+        *flags = (audio_output_flags_t)(*flags & ~(AUDIO_OUTPUT_FLAG_DIRECT
+                | AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD | AUDIO_OUTPUT_FLAG_MMAP_NOIRQ
+                | AUDIO_OUTPUT_FLAG_HW_AV_SYNC | AUDIO_OUTPUT_FLAG_RAW | AUDIO_OUTPUT_FLAG_FAST
+                | AUDIO_OUTPUT_FLAG_SPATIALIZER | AUDIO_OUTPUT_FLAG_BIT_PERFECT));
+    }
+
     // Use the spatializer output if the content can be spatialized, no preferred mixer
     // was specified and offload or direct playback is not explicitly requested, and there is no
     // haptic channel included in playback
     *isSpatialized = false;
-    if (shouldBeSpatialized(attr, config, devices.toTypeAddrVector(),
-                            *flags, session, prefMixerConfigInfo)) {
+    if (!coPlay && shouldBeSpatialized(attr, config, devices.toTypeAddrVector(),
+                                       *flags, session, prefMixerConfigInfo)) {
         *isSpatialized = true;
         return mSpatializerOutput->mIoHandle;
     }
@@ -2531,6 +2665,10 @@ audio_io_handle_t AudioPolicyManager::selectOutput(const std::set<audio_io_handl
 {
     LOG_ALWAYS_FATAL_IF(!(format == AUDIO_FORMAT_INVALID || audio_is_linear_pcm(format)),
         "%s called with format %#x", __func__, format);
+
+    if (mCoPlayOutput != nullptr && outputs.count(mCoPlayOutput->mIoHandle) > 0) {
+        return mCoPlayOutput->mIoHandle;
+    }
 
     // Return the output that haptic-generating attached to when 1) session id is specified,
     // 2) haptic-generating effect exists for given session id and 3) the output that
@@ -8142,6 +8280,11 @@ void AudioPolicyManager::closeOutput(audio_io_handle_t output)
             audio_io_handle_t duplicatedOutput = mOutputs.keyAt(i);
             ALOGV("closeOutput() closing also duplicated output %d", duplicatedOutput);
 
+            if (dupOutput == mCoPlayOutput) {
+                mCoPlayOutput.clear();
+                mCoPlayWiredOutput.clear();
+                mCoPlayBtOutput.clear();
+            }
             mpClientInterface->closeOutput(duplicatedOutput);
             removeOutput(duplicatedOutput);
         }
@@ -8239,11 +8382,16 @@ std::set<audio_io_handle_t> AudioPolicyManager::getOutputsForDevices(
 {
     std::set<audio_io_handle_t> outputs;
 
+    const bool coPlay = mCoPlayOutput != nullptr && isCoPlayDeviceSet(devices);
+
     ALOGVV("%s() devices %s", __func__, devices.toString().c_str());
     for (size_t i = 0; i < openOutputs.size(); i++) {
         ALOGVV("output %zu isDuplicated=%d device=%s",
                 i, openOutputs.valueAt(i)->isDuplicated(),
                 openOutputs.valueAt(i)->routableDevices().toString().c_str());
+        if (coPlay && !openOutputs.valueAt(i)->isDuplicated()) {
+            continue;
+        }
         if (openOutputs.valueAt(i)->routesToAllDevices(devices)
                 && openOutputs.valueAt(i)->devicesSupportEncodedFormats(devices.types())) {
             ALOGVV("%s() found output %d", __func__, openOutputs.keyAt(i));
@@ -8255,6 +8403,7 @@ std::set<audio_io_handle_t> AudioPolicyManager::getOutputsForDevices(
 
 void AudioPolicyManager::checkForDeviceAndOutputChanges(std::function<void()> onOutputsChecked)
 {
+    updateCoPlayOutput();
     checkOutputForAllStrategies();
     checkSecondaryOutputs();
     if (onOutputsChecked != nullptr) {
@@ -9010,13 +9159,21 @@ uint32_t AudioPolicyManager::checkDeviceMuteStrategies(const sp<AudioOutputDescr
 
 uint32_t AudioPolicyManager::setOutputDevices(const char *caller,
                                               const sp<SwAudioOutputDescriptor>& outputDesc,
-                                              const DeviceVector &devices,
+                                              const DeviceVector &requestedDevices,
                                               bool force,
                                               int delayMs,
                                               audio_patch_handle_t *patchHandle,
                                               bool requiresMuteCheck, bool requiresVolumeCheck,
                                               bool skipMuteDelay)
 {
+    const DeviceVector devices = (mCoPlayOutput != nullptr && isCoPlayDeviceSet(requestedDevices))
+            ? (outputDesc == mCoPlayWiredOutput
+                    ? requestedDevices.getDevicesFromTypes(getCoPlayWiredDeviceTypes())
+                    : (outputDesc == mCoPlayBtOutput
+                            ? requestedDevices.getDevicesFromTypes(getCoPlayBtDeviceTypes())
+                            : requestedDevices))
+            : requestedDevices;
+
     // TODO(b/262404095): Consider if the output need to be reopened.
     std::string logPrefix = std::string("caller ") + caller + outputDesc->info();
     ALOGV("%s %s device %s delayMs %d", __func__, logPrefix.c_str(),
