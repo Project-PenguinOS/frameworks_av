@@ -1000,6 +1000,7 @@ status_t Spatializer::attachOutput(audio_io_handle_t output,
         outputChanged = mOutput != output;
         mOutput = output;
         mActiveTracksMasks = activeTracksMasks;
+        mEngineChannelCount = -1;
         AudioSystem::addSupportedLatencyModesCallback(this);
 
         std::vector<audio_latency_mode_t> latencyModes;
@@ -1201,7 +1202,29 @@ bool Spatializer::shouldUseHeadTracking_l() const {
     return false;
 }
 
+void Spatializer::checkEngineChannelCount_l() {
+    static const int32_t kParam =
+            property_get_int32("ro.audio.spatializer_channel_count_param", 0);
+    if (kParam == 0 || mEngine == nullptr) {
+        return;
+    }
+    int32_t count = 0;
+    for (const auto mask : mActiveTracksMasks) {
+        count = std::max(count, static_cast<int32_t>(audio_channel_count_from_out_mask(mask)));
+    }
+    if (count == mEngineChannelCount) {
+        return;
+    }
+    const status_t status =
+            setEffectParameter_l(static_cast<uint32_t>(kParam), std::vector<int32_t>{count});
+    mLocalLog.log("%s: param %#x count %d status %d", __func__, kParam, count, status);
+    if (status == NO_ERROR) {
+        mEngineChannelCount = count;
+    }
+}
+
 void Spatializer::checkEngineState_l() {
+    checkEngineChannelCount_l();
     if (mEngine != nullptr) {
         if (mLevel != Spatialization::Level::NONE && mActiveTracksMasks.size() > 0) {
             mEngine->setEnabled(true);

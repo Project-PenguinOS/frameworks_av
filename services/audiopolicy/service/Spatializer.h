@@ -440,6 +440,13 @@ private:
     void checkEngineState_l() REQUIRES(mMutex);
 
     /**
+     * Tells the engine the largest channel count among active tracks, for engines that
+     * only render as many input channels as they are told about. Disabled unless
+     * ro.audio.spatializer_channel_count_param names the engine parameter id.
+     */
+    void checkEngineChannelCount_l() REQUIRES(mMutex);
+
+    /**
      * Reset head tracking mode and recenter pose in engine: Called when the head tracking
      * is disabled.
      */
@@ -558,6 +565,8 @@ private:
     sp<EngineCallbackHandler> mHandler;
 
     std::vector<audio_channel_mask_t> mActiveTracksMasks GUARDED_BY(mMutex);
+    /** last channel count sent by checkEngineChannelCount_l(), -1 if none */
+    int32_t mEngineChannelCount GUARDED_BY(mMutex) = -1;
     std::vector<audio_latency_mode_t> mSupportedLatencyModes GUARDED_BY(mMutex);
     /** preference order for low latency modes according to persist.bluetooth.hid.transport */
     std::vector<audio_latency_mode_t> mOrderedLowLatencyModes;
