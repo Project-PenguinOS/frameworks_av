@@ -3079,4 +3079,9 @@ Status AudioPolicyService::useMmapForPcmOffload(bool* _aidl_return) {
             mAudioPolicyManager->useMmapForPcmOffload(_aidl_return));
 }
 
+Status AudioPolicyService::isSpatializerOutputActive(bool* _aidl_return) {
+    *_aidl_return = mSpatializer != nullptr && mSpatializer->getOutput() != AUDIO_IO_HANDLE_NONE;
+    return Status::ok();
+}
+
 } // namespace android

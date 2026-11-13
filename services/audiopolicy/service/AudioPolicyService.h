@@ -366,6 +366,7 @@ public:
             android::media::audio::common::FlushFromFrameSupport* _aidl_return) override;
 
     binder::Status useMmapForPcmOffload(bool* _aidl_return) override;
+    binder::Status isSpatializerOutputActive(bool* _aidl_return) override;
 
     status_t onTransact(uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags) override;
 

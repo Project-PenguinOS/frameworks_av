@@ -569,4 +569,10 @@ interface IAudioPolicyService {
      * Returns if mmap path is preferred for pcm offload playback.
      */
     boolean useMmapForPcmOffload();
+
+    /**
+     * Returns if the spatializer output is open, that is if content that can be spatialized
+     * is rendered by the spatializer on the device currently used for media.
+     */
+    boolean isSpatializerOutputActive();
 }

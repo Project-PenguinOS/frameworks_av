@@ -795,6 +795,12 @@ public:
 
     static status_t useMmapForPcmOffload(bool* useMmapForPcmOffload);
 
+    /**
+     * Query if the spatializer output is open: spatialization is enabled and supported on the
+     * device currently used for media.
+     */
+    static status_t isSpatializerOutputActive(bool* active);
+
     // A listener for capture state changes.
     class CaptureStateListener : public virtual RefBase {
     public:

@@ -3131,6 +3131,19 @@ status_t AudioSystem::useMmapForPcmOffload(bool* useMmapForPcmOffload) {
     return statusTFromBinderStatus(aps->useMmapForPcmOffload(useMmapForPcmOffload));
 }
 
+status_t AudioSystem::isSpatializerOutputActive(bool* active) {
+    if (active == nullptr) {
+        return BAD_VALUE;
+    }
+
+    const sp<IAudioPolicyService> aps = get_audio_policy_service();
+    if (aps == nullptr) {
+        return NO_INIT;
+    }
+
+    return statusTFromBinderStatus(aps->isSpatializerOutputActive(active));
+}
+
 // ---------------------------------------------------------------------------
 
 int AudioSystem::AudioPolicyServiceClient::addAudioPortCallback(
