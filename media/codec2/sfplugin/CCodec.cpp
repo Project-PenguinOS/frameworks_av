@@ -23,6 +23,8 @@
 #include <sstream>
 #include <thread>
 
+#include <unistd.h>
+
 #include <android_media_codec.h>
 
 #include <C2Config.h>
@@ -43,6 +45,7 @@
 #include <gui/IGraphicBufferProducer.h>
 #include <gui/Surface.h>
 #include <gui/bufferqueue/1.0/H2BGraphicBufferProducer.h>
+#include <media/AudioSystem.h>
 #include <media/omx/1.0/WOmxNode.h>
 #include <media/openmax/OMX_Core.h>
 #include <media/openmax/OMX_IndexExt.h>
@@ -87,6 +90,35 @@ namespace {
 
 constexpr size_t kMaxClientInputBufferSize = 100 * 1024 * 1024;  // 100MB
 constexpr size_t kMinClientInputBufferSize = 100000;  // 100KB
+
+// Dolby decoders render Atmos to stereo themselves, using the Dolby settings, only while the
+// client leaves the output channel count open. Any limit makes them hand out plain PCM instead,
+// which is only useful when something downstream renders the extra channels: the spatializer
+// or a multichannel output.
+bool letDolbyDecoderRender(const std::string &name, const sp<AMessage> &format) {
+    int32_t maxChannels;
+    if (name.rfind("c2.dolby.", 0) != 0 || name.find("decoder") == std::string::npos
+            || !format->findInt32(KEY_MAX_OUTPUT_CHANNEL_COUNT, &maxChannels)) {
+        return false;
+    }
+    if (maxChannels <= 2) {
+        return true;
+    }
+    audio_attributes_t attr = AUDIO_ATTRIBUTES_INITIALIZER;
+    attr.usage = AUDIO_USAGE_MEDIA;
+    attr.content_type = AUDIO_CONTENT_TYPE_MUSIC;
+    audio_config_t audioConfig = AUDIO_CONFIG_INITIALIZER;
+    audioConfig.sample_rate = 48000;
+    audioConfig.channel_mask = AUDIO_CHANNEL_OUT_5POINT1;
+    audioConfig.format = AUDIO_FORMAT_PCM_16_BIT;
+    bool spatialized = false;
+    if (AudioSystem::isSpatializerOutputActive(&spatialized) != OK || spatialized) {
+        return false;
+    }
+    audio_direct_mode_t direct = AUDIO_DIRECT_NOT_SUPPORTED;
+    return AudioSystem::getDirectPlaybackSupport(&attr, getuid(), &audioConfig, &direct) == OK
+            && direct == AUDIO_DIRECT_NOT_SUPPORTED;
+}
 
 class CCodecWatchdog : public AHandler {
 private:
@@ -1740,6 +1772,12 @@ void CCodec::configure(const sp<AMessage> &msg) {
         if (sdkParams->findInt32(PARAMETER_KEY_VIDEO_BITRATE, &videoBitrate)) {
             sdkParams = msg->dup();
             sdkParams->removeEntryAt(sdkParams->findEntryByName(PARAMETER_KEY_VIDEO_BITRATE));
+        }
+        if (letDolbyDecoderRender(comp->getName(), sdkParams)) {
+            if (sdkParams == msg) {
+                sdkParams = msg->dup();
+            }
+            sdkParams->removeEntryByName(KEY_MAX_OUTPUT_CHANNEL_COUNT);
         }
         err = config->getConfigUpdateFromSdkParams(
                 comp, sdkParams, Config::IS_CONFIG, C2_DONT_BLOCK, &configUpdate);

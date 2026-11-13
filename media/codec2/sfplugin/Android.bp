@@ -18,6 +18,7 @@ cc_library_shared {
 
     defaults: [
         "android.hardware.graphics.common-ndk_shared",
+        "libaudioclient_client",
     ],
 
     export_include_dirs: ["include"],
