@@ -149,8 +149,8 @@ ComponentStore::ComponentStore(const std::shared_ptr<C2ComponentStore>& store)
     // MultiAccessUnit reflector helper is allocated once per store.
     // All components in this store can reuse this reflector helper.
     std::shared_ptr<C2ReflectorHelper> helper = std::make_shared<C2ReflectorHelper>();
+    // Not a member: prebuilt vendor services use the pre-07b6b1570b layout.
     mParamReflectors.push_back(helper);
-    mMultiAccessUnitReflector = helper;
 
     // Retrieve supported parameters from store
     using namespace std::placeholders;
@@ -234,7 +234,7 @@ std::shared_ptr<MultiAccessUnitInterface> ComponentStore::tryCreateMultiAccessUn
         if (!isComponentSupportsLargeAudioFrame) {
             multiAccessUnitIntf = std::make_shared<MultiAccessUnitInterface>(
                     c2interface,
-                    mMultiAccessUnitReflector);
+                    std::static_pointer_cast<C2ReflectorHelper>(mParamReflectors.back()));
         }
     }
     return multiAccessUnitIntf;
