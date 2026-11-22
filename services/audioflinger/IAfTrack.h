@@ -444,6 +444,7 @@ class AfPlaybackCommon : public virtual RefBase {
     std::atomic<bool> mHasOpControlPartial {true};
     std::atomic<bool> mHasOpControlFull {true};
     mutable std::atomic<bool> mPlaybackHardeningLogged {false};
+    mutable std::atomic<bool> mPlaybackHardeningLoggedFull {false};
     // the ref behind the optional is const
     // these members are last in decl order to ensure it is destroyed first
     std::optional<AppOpsSession> mOpControlPartialSession;

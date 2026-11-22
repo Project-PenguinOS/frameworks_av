@@ -39,6 +39,7 @@ public:
             android::media::audio::common::FlushFromFrameAccuracy accuracy,
             int64_t requestedPosition,
             int64_t* actualFlushedPosition) final;
+    status_t setOffloadEndOfStream() final;
     status_t setVolume(float left, float right) final;
     ssize_t getBufferSizeInFrames() final;
     ssize_t setBufferSizeInFrames(size_t size) final;

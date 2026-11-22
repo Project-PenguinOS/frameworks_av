@@ -627,6 +627,11 @@ public:
      */
             virtual void        pause();
 
+    /* Notify the server that the client has written all data and pending a stream end callback
+     * when all data is played.
+     */
+            virtual status_t setOffloadEndOfStream();
+
     /* Pause and wait (with timeout) for the audio track to ramp to silence.
      *
      * \param timeout is the time limit to wait before returning.

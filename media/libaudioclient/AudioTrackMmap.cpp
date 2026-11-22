@@ -22,6 +22,7 @@
 #include <audio_utils/clock.h>
 #include <audio_utils/mutex.h>
 #include <binding/AAudioBinderClient.h>
+#include <com_android_media_audioclient.h>
 #include <core/AAudioStreamOpenRequest.h>
 #include <media/AudioSystem.h>
 #include <media/AudioTrackMmap.h>
@@ -180,6 +181,9 @@ status_t AudioTrackMmap::start() {
                 .set(AMEDIAMETRICS_PROP_STATUS, (int32_t)status)
                 .record(); });
     AutoMutex lock(mLock);
+    if (mState == STATE_ACTIVE) {
+        return INVALID_OPERATION;
+    }
     status = mStream->systemStart() == AAUDIO_OK ? OK :
             logIfErrorAndReturnStatus(DEAD_OBJECT, "Failed to start aaudio stream");
     mState = STATE_ACTIVE;
@@ -257,6 +261,16 @@ status_t AudioTrackMmap::flushFromFrame(
     *actualFlushedPosition = requestedPosition;
     return AAudioConvert_aaudioToAndroidStatus(mStream->flushFromFrame(
             AAudioConvert_androidToAAudioFlushFromAccuracy(accuracy), actualFlushedPosition));
+}
+
+status_t AudioTrackMmap::setOffloadEndOfStream() {
+    if (!com::android::media::audioclient::audiotrack_set_offload_end_of_stream()) {
+        stop();
+        return NO_ERROR;
+    } else {
+        AutoMutex lock(mLock);
+        return AAudioConvert_aaudioToAndroidStatus(mStream->setOffloadEndOfStream());
+    }
 }
 
 ssize_t AudioTrackMmap::getBufferSizeInFrames() {

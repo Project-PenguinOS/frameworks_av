@@ -992,6 +992,15 @@ bool AudioTrack::stopped() const
     return mState != STATE_ACTIVE;
 }
 
+status_t AudioTrack::setOffloadEndOfStream() {
+    if (!isOffloaded()) {
+        return INVALID_OPERATION;
+    }
+    // For AudioTrack, call stop to simulate a drain behavior.
+    stop();
+    return NO_ERROR;
+}
+
 void AudioTrack::flush()
 {
     const int64_t beginNs = systemTime();

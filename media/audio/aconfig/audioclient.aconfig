@@ -15,4 +15,14 @@ flag {
       purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "audiotrack_set_offload_end_of_stream"
+    namespace: "media_audio"
+    description: "Call setOffloadEndOfStream instead of stop."
+    bug: "502667517"
+    metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
 # go/keep-sorted end
